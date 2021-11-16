@@ -22,6 +22,8 @@ void DisplayMenu::changeContext(MenuContext context)
 void DisplayMenu::draw()
 {
 
+    _display.clearDisplay();
+
     switch (_currContext)
     {
         case MENU_SPLASH:
@@ -59,14 +61,53 @@ void DisplayMenu::_splashDraw()
 void DisplayMenu::_compassDraw()
 {
 
+    _display.drawBitmap(64, 0, compassBitmaps[COMPASS_BACKGROUND], BITMAP_WIDTH, BITMAP_WIDTH, WHITE);
+    _display.drawBitmap(64, 0, compassBitmaps[MAGNET_CONTEXT.compass_position], BITMAP_WIDTH, BITMAP_WIDTH, WHITE);
+
+    _display.setCursor(0, 0);
+    _display.setTextSize(1);
+    _display.println("Mag");
+    
+    // Print X Accel
+    _display.print("X: ");
+    _display.println(MAGNET_CONTEXT.magX, 2);
+
+    // Print Y Accel
+    _display.print("Y: ");
+    _display.println(MAGNET_CONTEXT.magY, 2);
+
+    // Print Z Accel
+    _display.print("Z: ");
+    _display.println(MAGNET_CONTEXT.magZ, 2);
+
+    _display.print("A: ");
+    _display.println(MAGNET_CONTEXT.angle, 2);
+
+
 }
 
 void DisplayMenu::_accelDraw()
 {
-    _display.setTextSize(1);
+
+    float test = 3.3221f;
+
+    _display.setTextSize(2);
     _display.setTextColor(WHITE);
+    
     _display.setCursor(0, 0);
     _display.println("Accel Menu");
+    
+    // Print X Accel
+    _display.print("X: ");
+    _display.println(ACCEL_CONTEXT.accelX, 3);
+
+    // Print Y Accel
+    _display.print("Y: ");
+    _display.println(ACCEL_CONTEXT.accelY, 3);
+
+    // Print Z Accel
+    _display.print("Z: ");
+    _display.println(ACCEL_CONTEXT.accelZ, 3);
 
 }
 

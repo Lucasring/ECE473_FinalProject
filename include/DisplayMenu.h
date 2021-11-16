@@ -1,5 +1,9 @@
+#pragma once
+
 #include <Wire.h>
 #include <Adafruit_SSD1306.h>
+#include "bitmaps.h"
+#include "context.h"
 
 /* Menu Enumerations */
 typedef enum MenuContext
@@ -10,17 +14,6 @@ typedef enum MenuContext
     MENU_GYRO,
     MENU_BATTERY,
 } MenuContext;
-
-/* Context Structs */
-typedef struct splashContext
-{
-
-} splashContext;
-
-typedef struct compassContext
-{
-
-} compassContext;
 
 /* Menu Class */
 class DisplayMenu
