@@ -13,19 +13,26 @@ typedef struct magnetContext
     float magX {0.0f};
     float magY {0.0f};
     float magZ {0.0f};
-    float angle {0.0f};
-    int compass_position = 0;
 } magnetContext;
 
 typedef struct gyroContext
 {
-    float pitch {0.0f};
-    float yaw {0.0f};
-    float roll {0.0f};
+    float pitch {0.0f}; // X
+    float roll {0.0f};  // Y
+    float yaw {0.0f};   // Z
 } gyroContext;
+
+typedef struct compassContext
+{
+    float heading {0.0f}; // Pointed Direction
+    float xh;
+    float yh;
+    int cardinal;
+} compassContext;
 
 /* Externs */
 
 extern accelContext     ACCEL_CONTEXT;
 extern magnetContext    MAGNET_CONTEXT;
-extern gryoContext      GRYO_CONTEXT;
+extern gyroContext      GYRO_CONTEXT;
+extern compassContext   COMPASS_CONTEXT;

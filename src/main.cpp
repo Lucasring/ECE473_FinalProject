@@ -70,7 +70,7 @@ void setup() {
     // Draw Splash Screen
     display.draw();
     delay(1000);
-    display.changeContext(MENU_COMPASS);
+    display.changeContext(MENU_ACCEL);
     
     // Enable Timer
     timer.enableTimer();
@@ -145,62 +145,20 @@ void _READ_MAGNETOMETER()
     MAGNET_CONTEXT.magX = IMU.getMagX_uT();
     MAGNET_CONTEXT.magY = IMU.getMagY_uT();
 
+    GYRO_CONTEXT.pitch = -IMU.getGyroY_rads();
+    GYRO_CONTEXT.roll = IMU.getGyroX_rads();
+    GYRO_CONTEXT.yaw = -IMU.getGyroZ_rads();
 
-    // Convert magnet vector into cardinal position
-    float magnitude = 1; //sqrt(pow(MAGNET_CONTEXT.magX, 2) + pow(MAGNET_CONTEXT.magY, 2));
-    float unitMagX = MAGNET_CONTEXT.magX;
-    float unitMagY = MAGNET_CONTEXT.magY;
-    float angle = atan2(unitMagY, unitMagX) * 180 / PI;
+    // Calculate X Heading
+    COMPASS_CONTEXT.xh =  MAGNET_CONTEXT.magX*cos(GYRO_CONTEXT.pitch) +
+                MAGNET_CONTEXT.magY*sin(GYRO_CONTEXT.roll)*sin(GYRO_CONTEXT.pitch) -
+                MAGNET_CONTEXT.magZ*cos(GYRO_CONTEXT.roll)*sin(GYRO_CONTEXT.pitch);
 
-    MAGNET_CONTEXT.angle = (angle < 0) ? angle += 360 : angle;
+    // Calculate Y Heading
+    COMPASS_CONTEXT.yh =  MAGNET_CONTEXT.magY*cos(GYRO_CONTEXT.roll) + 
+                MAGNET_CONTEXT.magZ*sin(GYRO_CONTEXT.roll);
 
-    if(angle <= 180 && angle > 135) {
-        MAGNET_CONTEXT.compass_position = WEST; 
-    } else if(angle <= 135 && angle > 90) {
-        MAGNET_CONTEXT.compass_position = NORTH_WEST;
-    } else if(angle <= 90 && angle > 45) {
-        MAGNET_CONTEXT.compass_position = NORTH;
-    } else if(angle <= 45 && angle > 0) {
-        MAGNET_CONTEXT.compass_position = NORTH_EAST;
-    } else if(angle <= 0 && angle > -45) {
-        MAGNET_CONTEXT.compass_position = EAST;
-    } else if(angle <= -45 && angle > -90) {
-        MAGNET_CONTEXT.compass_position = SOUTH_EAST;
-    } else if(angle <= -90 && angle > -135) {
-        MAGNET_CONTEXT.compass_position = SOUTH;
-    } else if(angle <= -135 && angle > -180) {
-        MAGNET_CONTEXT.compass_position = SOUTH_WEST;
-    }
-
-    //switch(index)
-    //{
-    //    case 0:
-    //        MAGNET_CONTEXT.compass_position = WEST;
-    //        break;
-    //    case 1:
-    //        MAGNET_CONTEXT.compass_position = SOUTH_WEST;
-    //        break;
-    //    case 2:
-    //        MAGNET_CONTEXT.compass_position = SOUTH;
-    //        break;
-    //    case 3:
-    //        MAGNET_CONTEXT.compass_position = SOUTH_EAST;
-    //        break;
-    //    case 4:
-    //        MAGNET_CONTEXT.compass_position = EAST;
-    //        break;
-    //    case 5:
-    //        MAGNET_CONTEXT.compass_position = NORTH_EAST;
-    //        break;
-    //    case 6:
-    //        MAGNET_CONTEXT.compass_position = NORTH;
-    //        break;
-    //    case 7:
-    //        MAGNET_CONTEXT.compass_position = NORTH_WEST;
-    //        break;
-    //}
-
-    MAGNET_CONTEXT.compass_position = (MAGNET_CONTEXT.compass_position + 1) % 8;
+    COMPASS_CONTEXT.heading = 180 * atan2(COMPASS_CONTEXT.yh, COMPASS_CONTEXT.xh) / PI;
 
 }
 
