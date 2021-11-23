@@ -3,7 +3,7 @@
 #include <Wire.h>
 #include <Adafruit_SSD1306.h>
 #include "bitmaps.h"
-#include "context.h"
+#include "globals.h"
 
 /* Menu Enumerations */
 typedef enum MenuContext

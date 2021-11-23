@@ -15,12 +15,20 @@ typedef struct magnetContext
     float magZ {0.0f};
 } magnetContext;
 
-typedef struct gyroContext
+typedef struct Qauternion
 {
+    float w {0.0f};
     float pitch {0.0f}; // X
     float roll {0.0f};  // Y
     float yaw {0.0f};   // Z
-} gyroContext;
+} Qauternion;
+
+typedef struct EulerAngles
+{
+    float roll {0.0f};
+    float pitch {0.0f};
+    float yaw {0.0f};
+} EulerAngles;
 
 typedef struct compassContext
 {
@@ -32,7 +40,9 @@ typedef struct compassContext
 
 /* Externs */
 
+extern Qauternion       g_OrientationQuaternion;
+extern EulerAngles      g_OrientationEuler;
+
 extern accelContext     ACCEL_CONTEXT;
 extern magnetContext    MAGNET_CONTEXT;
-extern gyroContext      GYRO_CONTEXT;
 extern compassContext   COMPASS_CONTEXT;
