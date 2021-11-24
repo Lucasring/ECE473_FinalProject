@@ -62,71 +62,14 @@ void DisplayMenu::_compassDraw()
 {
 
     _display.drawBitmap(64, 0, compassBitmaps[COMPASS_BACKGROUND], BITMAP_WIDTH, BITMAP_WIDTH, WHITE);
-    //_display.drawBitmap(64, 0, compassBitmaps[MAGNET_CONTEXT.compass_position], BITMAP_WIDTH, BITMAP_WIDTH, WHITE);
+    _display.drawBitmap(64, 0, compassBitmaps[COMPASS_CONTEXT.cardinal], BITMAP_WIDTH, BITMAP_WIDTH, WHITE);
 
     _display.setCursor(0, 0);
     _display.setTextSize(1);
-    _display.println("Mag");
+    _display.println("Compass\n");
 
-    if(MAGNET_CONTEXT.magX >= 0)
-    {
-        _display.print("X: ");
-        _display.println(MAGNET_CONTEXT.magX, 2);
-    } else {
-        _display.print("X:-");
-        _display.println(-1 * MAGNET_CONTEXT.magX, 2);
-    }
-
-    if(MAGNET_CONTEXT.magY >= 0)
-    {
-        _display.print("Y: ");
-        _display.println(MAGNET_CONTEXT.magY, 2);
-    } else {
-        _display.print("Y:-");
-        _display.println(-1 * MAGNET_CONTEXT.magY, 2);
-    }
-
-    if(MAGNET_CONTEXT.magZ >= 0)
-    {
-        _display.print("Z: ");
-        _display.println(MAGNET_CONTEXT.magZ, 2);
-    } else {
-        _display.print("Z:-");
-        _display.println(-1 * MAGNET_CONTEXT.magZ, 2);
-    }
-
-    _display.print("A: ");
+    _display.println("Heading:");
     _display.println(COMPASS_CONTEXT.heading, 2);
-
-        // Print roll
-    if(g_OrientationEuler.roll >= 0)
-    {
-        _display.print("R: ");
-        _display.println((180 / PI) * g_OrientationEuler.roll, 3);
-    } else {
-        _display.print("R:-");
-        _display.println(-(180 / PI) * g_OrientationEuler.roll, 3);
-    }
-
-    // Print pitch
-    if(g_OrientationEuler.pitch >= 0)
-    {
-        _display.print("P: ");
-        _display.println((180 / PI) * g_OrientationEuler.pitch, 3);
-    } else {
-        _display.print("P:-");
-        _display.println(-(180 / PI) * g_OrientationEuler.pitch, 3);
-    }
-
-    // Print yaw
-    if(g_OrientationEuler.yaw >= 0)
-    {
-        _display.print("Y: ");
-        _display.println((180 / PI) * g_OrientationEuler.yaw, 3);
-    } else {
-        _display.print("Y:-");
-        _display.println(-(180 / PI) * g_OrientationEuler.yaw, 3);
-    }
 
 }
 
@@ -163,33 +106,23 @@ void DisplayMenu::_gyroDraw()
     _display.println("Gyro Menu");
     
     // Print roll
-    if(g_OrientationQuaternion.roll >= 0)
+    if(g_OrientationEuler.roll >= 0)
     {
         _display.print("R: ");
-        _display.println(g_OrientationQuaternion.roll, 3);
+        _display.println((180 / PI) * g_OrientationEuler.roll, 3);
     } else {
         _display.print("R:-");
-        _display.println(-1*g_OrientationQuaternion.roll, 3);
+        _display.println(-(180 / PI) * g_OrientationEuler.roll, 3);
     }
 
     // Print pitch
-    if(g_OrientationQuaternion.pitch >= 0)
+    if(g_OrientationEuler.pitch >= 0)
     {
         _display.print("P: ");
-        _display.println(g_OrientationQuaternion.pitch, 3);
+        _display.println((180 / PI) * g_OrientationEuler.pitch, 3);
     } else {
         _display.print("P:-");
-        _display.println(-1*g_OrientationQuaternion.pitch, 3);
-    }
-
-    // Print yaw
-    if(g_OrientationQuaternion.yaw >= 0)
-    {
-        _display.print("Y: ");
-        _display.println(g_OrientationQuaternion.yaw, 3);
-    } else {
-        _display.print("Y:-");
-        _display.println(-1*g_OrientationQuaternion.yaw, 3);
+        _display.println(-(180 / PI) * g_OrientationEuler.pitch, 3);
     }
 
 }

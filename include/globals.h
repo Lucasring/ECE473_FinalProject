@@ -13,6 +13,10 @@ typedef struct magnetContext
     float magX {0.0f};
     float magY {0.0f};
     float magZ {0.0f};
+    float CmagX {0.0f};
+    float CmagY {0.0f};
+    float CmagZ {0.0f};
+    float magnitude {0.0f};
 } magnetContext;
 
 typedef struct Qauternion
@@ -40,9 +44,9 @@ typedef struct compassContext
 
 /* Externs */
 
-extern Qauternion       g_OrientationQuaternion;
-extern EulerAngles      g_OrientationEuler;
+volatile extern Qauternion       g_OrientationQuaternion;
+volatile extern EulerAngles      g_OrientationEuler;
 
-extern accelContext     ACCEL_CONTEXT;
-extern magnetContext    MAGNET_CONTEXT;
-extern compassContext   COMPASS_CONTEXT;
+volatile extern accelContext     ACCEL_CONTEXT;
+volatile extern magnetContext    MAGNET_CONTEXT;
+volatile extern compassContext   COMPASS_CONTEXT;

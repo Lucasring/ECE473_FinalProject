@@ -5,8 +5,9 @@
 #include <MPU9250.h>
 #include <math.h>
 #include <BasicLinearAlgebra.h>
-#include "DisplayMenu.h"
+#include <queue>
 
+#include "DisplayMenu.h"
 // Defines
 #define TIMER2_PERIOD_MS    1    
 
@@ -17,22 +18,26 @@
 
 // Process Start Time Offset
 #define IMU_OFFSET          0
-#define MAGNET_OFFSET       20
+#define MAGNET_OFFSET       25
 #define LCD_OFFSET          50
 
 // State Definitions
 typedef enum STATE
 {
-    INIT = 0,
-    IDLE,
+    IDLE = 0,
+    INIT,
+    UPDATE_LCD,
     READ_IMU,
     READ_MAGNETOMETER,
-    UPDATE_LCD,
+    BUTTON_LEFT,
+    BUTTON_RIGHT,
 } STATE;
 
 // GLOBALS
+std::priority_queue<int> STATES;
 STATE CURRENT_STATE = INIT;
 
+// IO Devices
 TwoWire Wire2(PB7, PB6);
 STM32TimerInterrupt timer(TIM2);
 DisplayMenu display;
@@ -63,7 +68,10 @@ void setup() {
     IMU.begin();
     IMU.setAccelRange(MPU9250::ACCEL_RANGE_4G);
     IMU.setGyroRange(MPU9250::GYRO_RANGE_250DPS);
-
+    IMU.setMagCalX(1.306, 0.956);
+    IMU.setMagCalY(28.961, 1.086);
+    IMU.setMagCalZ(-25.828, 0.998);
+    
     // Setup Display
     display = DisplayMenu(128, 64, &Wire2, MENU_SPLASH);
 
@@ -81,12 +89,6 @@ void setup() {
 }
 
 void loop() {
-
-    //if(CURRENT_STATE == IDLE)   {
-    //    digitalWrite(PC13, HIGH);
-    //} else {
-    //    digitalWrite(PC13, LOW);
-    //}
 
     switch(CURRENT_STATE) 
     {
@@ -140,114 +142,81 @@ void _READ_IMU()
     ACCEL_CONTEXT.accelX = IMU.getAccelY_mss();
     ACCEL_CONTEXT.accelZ = IMU.getAccelZ_mss();
 
-    // Setup Current Normalized Accel Vector
-    float V_mag = sqrt( pow(ACCEL_CONTEXT.accelX, 2) + pow(ACCEL_CONTEXT.accelY, 2) + pow(ACCEL_CONTEXT.accelZ, 2) );
-    float V[3] = { ACCEL_CONTEXT.accelX / V_mag, ACCEL_CONTEXT.accelY / V_mag, ACCEL_CONTEXT.accelZ / V_mag };
+    // Setup Vectors
+    volatile float A[3] = {ACCEL_CONTEXT.accelX, ACCEL_CONTEXT.accelY, ACCEL_CONTEXT.accelZ};
+    volatile float A_mag = sqrt(pow(A[0], 2) + pow(A[1], 2) + pow(A[2], 2));
+    volatile float Ax = A[0] / A_mag;
+    volatile float Ay = A[1] / A_mag;
+    volatile float Az = A[2] / A_mag;
 
-    // Calculate Half angle vector
-    float half_mag = sqrt( pow(V[0], 2) + pow(V[1], 2) + pow(V[2] - 1, 2) );
-    float half[3] = { 
-                        V[0] / half_mag, 
-                        V[1] / half_mag, 
-                        (V[2] - 1) / half_mag 
-                    };
+    // Calculate angle between down vector and accel
+    g_OrientationEuler.roll =  acosf( (-Az) / sqrt(pow(Ay, 2) + pow(Az, 2)) );
+    g_OrientationEuler.roll = (Ay > 0) ? g_OrientationEuler.roll : -g_OrientationEuler.roll;
 
-    // V crossproduct half
-    float cross[3] = {0};
-    cross[0] = -(V[1]*half[2] - V[2]*half[1]);
-    cross[1] = -(V[2]*half[0] - V[0]*half[2]);
-    cross[2] = -(V[0]*half[1] - V[1]*half[0]);
+    g_OrientationEuler.pitch = acosf( (-Az) / sqrt(pow(Ax, 2) + pow(Az, 2)) );
+    g_OrientationEuler.pitch = (Ax > 0) ? g_OrientationEuler.pitch : -g_OrientationEuler.pitch;
 
-    // Calculate dot product
-    float dot = V[0]*half[0] + V[1]*half[1] + V[2]*half[2];
-
-    // Setup Quaternion
-    float Q_mag = sqrt( pow(dot, 2) + pow(cross[0], 2) + pow(cross[1], 2) + pow(cross[2], 2) );
-    float Q[4] = {
-                dot / Q_mag,
-                cross[0] / Q_mag,
-                cross[1] / Q_mag,
-                cross[2] / Q_mag
-            };
-
-    // Float Angles
-    g_OrientationEuler.roll = atan2f( 2*(Q[0]*Q[1] + Q[2]*Q[3]), 1 - 2*( pow(Q[1], 2) + pow(Q[2], 2) ));
-    g_OrientationEuler.pitch = asinf( 2*(Q[0]*Q[2] - Q[3]*Q[1]) );
-    g_OrientationEuler.yaw = atan2f( 2*(Q[0]*Q[3] + Q[1]*Q[2]), 1 - 2*( pow(Q[2], 2) + pow(Q[3], 2) ));
-
-    // Store Quaternion
-    g_OrientationQuaternion.w       = Q[0];
-    g_OrientationQuaternion.roll    = Q[1];
-    g_OrientationQuaternion.pitch   = Q[2];
-    g_OrientationQuaternion.yaw     = Q[3];
+    // g_OrientationEuler.roll =  acosf( (A[1]*G[1] + A[2]*G[2]) / ( sqrt(pow(A[1], 2) * pow(A[2], 2)) * sqrt(pow(G[1], 2) * pow(G[2], 2)) ));
+    // g_OrientationEuler.pitch = acosf( (A[0]*G[0] + A[2]*G[2]) / ( sqrt(pow(A[0], 2) * pow(A[2], 2)) * sqrt(pow(G[0], 2) * pow(G[2], 2)) ));
 
 }
 
 
-volatile Qauternion magQuat;
 void _READ_MAGNETOMETER()
 {
 
     IMU.readSensor();
-    MAGNET_CONTEXT.magX = IMU.getMagY_uT();
-    MAGNET_CONTEXT.magY = IMU.getMagX_uT();
-    MAGNET_CONTEXT.magZ = -IMU.getMagZ_uT();
 
-    //volatile float magnitude = sqrt( pow(MAGNET_CONTEXT.magX,2) + pow(MAGNET_CONTEXT.magY,2) + pow(MAGNET_CONTEXT.magZ,2));
-    //MAGNET_CONTEXT.magX /= magnitude;
-    //MAGNET_CONTEXT.magY /= magnitude;
-    //MAGNET_CONTEXT.magZ /= magnitude;
+    // Measured Magnetometer Vector with orientation corrections
+    Matrix<3, 1, Array<3, 1, float>> magnetometerMeasurement = {
+        IMU.getMagY_uT(),   // X Axis
+        IMU.getMagX_uT(),   // Y Axis
+       -IMU.getMagZ_uT(),   // Z Axis
+    };
 
-    magQuat.w = g_OrientationQuaternion.w;
-    magQuat.roll = g_OrientationQuaternion.roll;
-    magQuat.pitch = g_OrientationQuaternion.pitch;
-    magQuat.yaw = g_OrientationQuaternion.yaw;
+    // Setup Rotation Matrix
+    float phi = g_OrientationEuler.roll;
+    float theta = g_OrientationEuler.pitch;
+    Matrix<3, 3, Array<3, 3, float>> RotationMatrix = {
+        cos(theta),             0,          sin(theta), 
+        sin(phi)*sin(theta),    cos(phi),   -cos(theta)*sin(phi), 
+        -cos(phi)*sin(theta),   sin(phi),   cos(phi)*cos(theta),
+    };
 
-    // Correct MagnetometerData to be in world space not local space
-    // Rotates magnetometer vector using orientation quaternion from accelerometer relative to gravity
+    Matrix<3, 1, Array<3, 1, float>> magnetometerTiltCorrected = RotationMatrix*magnetometerMeasurement;
 
-    Matrix<3, 1, Array<3, 1, float>> MagnetometerData;
-    MagnetometerData = {MAGNET_CONTEXT.magX, MAGNET_CONTEXT.magY, MAGNET_CONTEXT.magZ};
+    // Record original measurement
+    MAGNET_CONTEXT.magX = magnetometerMeasurement(0, 0);
+    MAGNET_CONTEXT.magZ = magnetometerMeasurement(1, 0);
+    MAGNET_CONTEXT.magY = magnetometerMeasurement(2, 0);
+    MAGNET_CONTEXT.magnitude = sqrt(pow(MAGNET_CONTEXT.magX, 2) + pow(MAGNET_CONTEXT.magY, 2) + pow(MAGNET_CONTEXT.magZ, 2));
 
-    Matrix<3, 3, Array<3, 3, float>> RotationMatrix;
-    RotationMatrix = {
-                        1.0f - 2*(pow(magQuat.pitch, 2) + pow(magQuat.yaw, 2)),
-                        2*(magQuat.roll * magQuat.pitch - magQuat.yaw * magQuat.w),
-                        2*(magQuat.roll * magQuat.yaw + magQuat.pitch * magQuat.w),
-                        2*(magQuat.roll * magQuat.pitch + magQuat.yaw * magQuat.w),
-                        1.0f - 2*(pow(magQuat.roll, 2) + pow(magQuat.yaw, 2)),
-                        2*(magQuat.pitch * magQuat.yaw - magQuat.roll * magQuat.w),
-                        2*(magQuat.roll * magQuat.yaw - magQuat.pitch * magQuat.w),
-                        2*(magQuat.pitch * magQuat.yaw + magQuat.roll * magQuat.w),
-                        1.0f - 2*(pow(magQuat.roll, 2) + pow(magQuat.pitch, 2)),
-                    };
+    // Record corrected
+    MAGNET_CONTEXT.CmagX = magnetometerTiltCorrected(0, 0);
+    MAGNET_CONTEXT.CmagY = magnetometerTiltCorrected(1, 0);
+    MAGNET_CONTEXT.CmagZ = magnetometerTiltCorrected(2, 0);
+    COMPASS_CONTEXT.heading = (180 / PI) * atan2f(MAGNET_CONTEXT.CmagY, MAGNET_CONTEXT.CmagX) + 180;
+    
+    // Convert Compass heading into cardinal direction
+    if (COMPASS_CONTEXT.heading >=  337.5 || COMPASS_CONTEXT.heading < 22.5) {
+        COMPASS_CONTEXT.cardinal = EAST;
+    } else if (COMPASS_CONTEXT.heading >= 22.5 && COMPASS_CONTEXT.heading < 67.5) {
+         COMPASS_CONTEXT.cardinal = SOUTH_EAST;
+    } else if (COMPASS_CONTEXT.heading >= 67.5 && COMPASS_CONTEXT.heading < 112.5) {
+        COMPASS_CONTEXT.cardinal = SOUTH;
+    } else if (COMPASS_CONTEXT.heading >= 112.5 && COMPASS_CONTEXT.heading < 157.5) {
+        COMPASS_CONTEXT.cardinal = SOUTH_WEST;
+    } else if (COMPASS_CONTEXT.heading >= 157.5 && COMPASS_CONTEXT.heading < 202.5) {
+        COMPASS_CONTEXT.cardinal = WEST;
+    } else if (COMPASS_CONTEXT.heading >= 202.5 && COMPASS_CONTEXT.heading < 247.5) {
+        COMPASS_CONTEXT.cardinal = NORTH_WEST;
+    } else if (COMPASS_CONTEXT.heading >= 247.5 && COMPASS_CONTEXT.heading < 292.5) {
+        COMPASS_CONTEXT.cardinal = NORTH;
+    } else if (COMPASS_CONTEXT.heading >= 292.5 && COMPASS_CONTEXT.heading < 337.5) {
+        COMPASS_CONTEXT.cardinal = NORTH_EAST;
+    }
 
-    Matrix<3, 1, Array<3, 1, float>> correctedMagnetometer = RotationMatrix*MagnetometerData;
 
-    //MAGNET_CONTEXT.magX = correctedMagnetometer(0, 0);
-    //MAGNET_CONTEXT.magY = correctedMagnetometer(1, 0);
-    //MAGNET_CONTEXT.magZ = correctedMagnetometer(2, 0);
-
-    MAGNET_CONTEXT.magX = MAGNET_CONTEXT.magX * cos(g_OrientationEuler.pitch) + MAGNET_CONTEXT.magY * sin(g_OrientationEuler.roll) * sin(g_OrientationEuler.pitch) -  MAGNET_CONTEXT.magZ * sin(g_OrientationEuler.pitch) * sin(g_OrientationEuler.roll);
-    MAGNET_CONTEXT.magY = MAGNET_CONTEXT.magY * cos(g_OrientationEuler.roll) + MAGNET_CONTEXT.magZ * sin(g_OrientationEuler.roll);
-    MAGNET_CONTEXT.magZ = 0;
-
-    // Process Into Compass Data
-    COMPASS_CONTEXT.heading = 0; // (180 / PI) * atan2f(MAGNET_CONTEXT.magY, MAGNET_CONTEXT.magX);
-
-    //Serial.print(MAGNET_CONTEXT.magX, 3);
-    //Serial.print(", ");
-    //Serial.print(MAGNET_CONTEXT.magY, 3);
-    //Serial.print(", ");
-    //Serial.print(MAGNET_CONTEXT.magZ, 3);
-    //Serial.print(", ");
-    //Serial.print(g_OrientationQuaternion.w, 3);
-    //Serial.print(", ");
-    //Serial.print(g_OrientationQuaternion.roll, 3);
-    //Serial.print(", ");
-    //Serial.print(g_OrientationQuaternion.pitch, 3);
-    //Serial.print(", ");
-    //Serial.println(g_OrientationQuaternion.yaw, 3);
 
 }
 
@@ -255,3 +224,21 @@ void _UPDATE_LCD()
 {
     display.draw();
 }
+
+    //do {
+    //    Serial.println("Calibrating Mag...");
+    //    IMU.calibrateMag();
+    //    Serial.println("Calibration results:");
+    //    Serial.print("Bias X: ");
+    //    Serial.println(IMU.getMagBiasX_uT(), 3);
+    //    Serial.print("Bias Y: ");
+    //    Serial.println(IMU.getMagBiasY_uT(), 3);
+    //    Serial.print("Bias Z: ");
+    //    Serial.println(IMU.getMagBiasZ_uT(), 3);
+    //    Serial.print("Scale X: ");
+    //    Serial.println(IMU.getMagScaleFactorX(), 3);
+    //    Serial.print("Scale Y: ");
+    //    Serial.println(IMU.getMagScaleFactorY(), 3);
+    //    Serial.print("Scale Z: ");
+    //    Serial.println(IMU.getMagScaleFactorZ(), 3);
+    //} while(1);

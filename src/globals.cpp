@@ -1,8 +1,8 @@
 #include "globals.h"
 
-Qauternion g_OrientationQuaternion;
-EulerAngles g_OrientationEuler;
+volatile Qauternion g_OrientationQuaternion;
+volatile EulerAngles g_OrientationEuler;
 
-accelContext ACCEL_CONTEXT;
-magnetContext MAGNET_CONTEXT;
-compassContext COMPASS_CONTEXT;
+volatile accelContext ACCEL_CONTEXT;
+volatile magnetContext MAGNET_CONTEXT;
+volatile compassContext COMPASS_CONTEXT;
