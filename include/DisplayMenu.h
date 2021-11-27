@@ -13,6 +13,7 @@ typedef enum MenuContext
     MENU_ACCEL,
     MENU_GYRO,
     MENU_BATTERY,
+    AMOUNT_OF_MENUS
 } MenuContext;
 
 /* Menu Class */
@@ -27,6 +28,8 @@ public:
     
     // Functions
     void changeContext(MenuContext context);
+    void nextMenu();
+    void prevMenu();
     void draw();
 
 private:

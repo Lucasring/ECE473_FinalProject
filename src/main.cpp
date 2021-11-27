@@ -6,12 +6,14 @@
 #include <math.h>
 #include <BasicLinearAlgebra.h>
 #include <queue>
+#include <CircularBuffer.h>
 
 #include "DisplayMenu.h"
 #include "globals.h"
 
 /* Defines */ 
-#define TIMER2_PERIOD_MS    1    
+#define SCHEDULER_PERIOD_MS     1    
+#define DEBOUNCE_PERIOD_MS      50
 
 // Process Call Period
 #define IMU_PERIOD_MS       100
@@ -19,12 +21,18 @@
 #define LCD_PERIOD_MS       100
 
 // Process Start Time Offset
-#define IMU_OFFSET          0
-#define MAGNET_OFFSET       25
-#define LCD_OFFSET          50
+#define IMU_OFFSET          5
+#define MAGNET_OFFSET       30
+#define LCD_OFFSET          55
 
-#define BUTTON_LEFT         PA0
-#define BUTTON_RIGHT        PA1
+#define PIN_BUTTON_LEFT         PA0
+#define PIN_BUTTON_RIGHT        PA1
+
+typedef enum BUTTON
+{
+    LEFT_BUTTON = 0,
+    RIGHT_BUTTON,
+} BUTTON;
 
 // State Definitions
 typedef enum STATE
@@ -38,8 +46,18 @@ typedef enum STATE
     BUTTON_RIGHT_PRESSED,
 } STATE;
 
+struct DebounceEvent
+{
+    uint32_t debounceTime;
+    BUTTON button;
+};
+
 // GLOBALS
-std::priority_queue<STATE> STATE_QUEUE;
+CircularBuffer<STATE, 32> STATE_QUEUE;
+CircularBuffer<DebounceEvent, 32> DEBOUNCE_QUEUE;
+
+volatile bool BUTTON_LEFT_DEBOUNCE = false;
+volatile bool BUTTON_RIGHT_DEBOUNCE = false;
 
 // IO Devices
 TwoWire Wire2(PB7, PB6);
@@ -48,14 +66,16 @@ STM32TimerInterrupt debounceTimer(TIM3);
 DisplayMenu display;
 MPU9250 IMU(Wire2, 0x68);
 
-/**
- * @brief   Timer ISR for main process scheduling
- * @note    Runs every TIMER2_PERIOD_MS milliseconds
- */
+// ISR Functions
 void schedulerTimerISR(void);
+void debounceTimerISR(void);
 void buttonLeftISR();
 void buttonRightISR();
 
+// Helper Functions
+void buttonHanlder(BUTTON button);
+
+// State functions
 void _READ_IMU();
 void _READ_MAGNETOMETER();
 void _UPDATE_LCD();
@@ -70,16 +90,17 @@ using namespace BLA;
 void setup() {
 
     // Setup GPIO
-    pinMode(BUTTON_LEFT, INPUT_PULLUP);
-    pinMode(BUTTON_RIGHT, INPUT_PULLUP);
+    pinMode(PIN_BUTTON_LEFT, INPUT_PULLUP);
+    pinMode(PIN_BUTTON_RIGHT, INPUT_PULLUP);
+    pinMode(PC13, OUTPUT);
 
     // IO Interrupt Enables
-    attachInterrupt(digitalPinToInterrupt(BUTTON_LEFT), buttonLeftISR, FALLING);
-    attachInterrupt(digitalPinToInterrupt(BUTTON_RIGHT), buttonRightISR, FALLING);
+    attachInterrupt(digitalPinToInterrupt(PIN_BUTTON_LEFT), buttonLeftISR, FALLING);
+    attachInterrupt(digitalPinToInterrupt(PIN_BUTTON_RIGHT), buttonRightISR, FALLING);
 
     // Setup I2C
     Wire2.begin();
-    Serial.begin(115200);
+    //Serial.begin(115200);
 
     // Setup IMU
     IMU.begin();
@@ -93,7 +114,12 @@ void setup() {
     display = DisplayMenu(128, 64, &Wire2, MENU_SPLASH);
 
     // Setup Timers
-    schedulerTimer.setInterval(TIMER2_PERIOD_MS * 1000, schedulerTimerISR);
+    schedulerTimer.setInterval(SCHEDULER_PERIOD_MS * 1000, schedulerTimerISR);
+    debounceTimer.setInterval(SCHEDULER_PERIOD_MS * 1000, debounceTimerISR);
+
+    debounceTimer.disableTimer();
+    schedulerTimer.disableTimer();
+
 
     // Draw Splash Screen
     display.draw();
@@ -107,11 +133,13 @@ void setup() {
 
 void loop() {
 
-    while(!STATE_QUEUE.empty()) 
+    digitalWrite(PC13, LOW);
+
+    while(!STATE_QUEUE.isEmpty()) 
     {
 
         // select state function
-        switch(STATE_QUEUE.top()) 
+        switch(STATE_QUEUE.first()) 
         {
             case READ_IMU:
                 _READ_IMU();
@@ -122,6 +150,14 @@ void loop() {
             case UPDATE_LCD:
                 _UPDATE_LCD();
                 break;
+            case BUTTON_LEFT_PRESSED:
+                digitalWrite(PC13, HIGH);
+                display.prevMenu();
+                break;
+            case BUTTON_RIGHT_PRESSED:
+                digitalWrite(PC13, HIGH);
+                display.nextMenu();
+                break;
             case IDLE:
                 break;
             default:
@@ -129,7 +165,7 @@ void loop() {
         }
 
         // remove executed state
-        STATE_QUEUE.pop();
+        STATE_QUEUE.shift();
 
     }
 }
@@ -142,7 +178,7 @@ unsigned int TIMER2_COUNT_MS = 0;
 void schedulerTimerISR(void) 
 {
 
-    TIMER2_COUNT_MS += TIMER2_PERIOD_MS;
+    TIMER2_COUNT_MS += SCHEDULER_PERIOD_MS;
 
     if( (TIMER2_COUNT_MS - IMU_OFFSET) % IMU_PERIOD_MS == 0 )
     {
@@ -162,13 +198,144 @@ void schedulerTimerISR(void)
 
 }
 
-void buttonLeftISR()
+void debounceTimerISR()
 {
 
+    // Check from DEBOUNCE_QUEUE what button is deboucing
+    // Clear debounce flag
+    // Queue button pressed state
+    // if DEBOUNCE_QUEUE is empty
+        // disable timer
+    // else
+        // Load next debounceTime
+
+    volatile DebounceEvent event = DEBOUNCE_QUEUE.first();
+
+    // Check if button is pressed low
+    volatile int buttonState;
+    switch (event.button)
+    {
+        case LEFT_BUTTON:
+            buttonState = digitalRead(PIN_BUTTON_LEFT);
+            break;
+        case RIGHT_BUTTON:            
+            buttonState = digitalRead(PIN_BUTTON_RIGHT);
+            break;
+        default:
+            buttonState = HIGH;
+            break;
+    }
+
+    if (buttonState == LOW)
+    {
+        switch(event.button)
+        {
+            case LEFT_BUTTON:
+                BUTTON_LEFT_DEBOUNCE = false;
+                STATE_QUEUE.push(BUTTON_LEFT_PRESSED);
+                break;
+            case RIGHT_BUTTON:
+                BUTTON_RIGHT_DEBOUNCE = false;
+                STATE_QUEUE.push(BUTTON_RIGHT_PRESSED);
+                break;
+            default:
+                break;
+        }
+
+        DEBOUNCE_QUEUE.shift();
+
+        if (DEBOUNCE_QUEUE.isEmpty())
+        {
+            debounceTimer.disableTimer();
+            return;
+        }
+        else
+        {
+            debounceTimer.restartTimer();
+            debounceTimer.setTimerCount((DEBOUNCE_PERIOD_MS * 1000) - event.debounceTime);
+        }
+    }
+    else
+    {
+        if (!DEBOUNCE_QUEUE.isEmpty())
+        {
+            DEBOUNCE_QUEUE.shift();
+        } else {
+            debounceTimer.disableTimer();
+        }
+
+        switch (event.button)
+        {
+            case LEFT_BUTTON:
+                BUTTON_LEFT_DEBOUNCE = false;
+                break;
+            case RIGHT_BUTTON:            
+                BUTTON_RIGHT_DEBOUNCE = false;
+                break;
+        }
+
+    }
+
+}
+
+void buttonLeftISR()
+{
+    buttonHanlder(LEFT_BUTTON);
 }
 
 void buttonRightISR()
 {
+    buttonHanlder(RIGHT_BUTTON);
+}
+
+void buttonHanlder(BUTTON button)
+{
+    
+    DebounceEvent event;
+    event.debounceTime = (DEBOUNCE_PERIOD_MS * 1000) - debounceTimer.getTimerCount();
+    event.button = button;
+
+    // Check if button is currently debouncing
+    volatile bool isButtonDebounced = false;
+    switch(button)
+    {
+        case LEFT_BUTTON:
+            isButtonDebounced = BUTTON_LEFT_DEBOUNCE;
+            break;
+        case RIGHT_BUTTON:
+            isButtonDebounced = BUTTON_RIGHT_DEBOUNCE;
+            break;
+        default:
+            isButtonDebounced = false;
+            break;
+    }
+
+    if (isButtonDebounced == false)
+    {
+
+        // If no button is currently debouncing
+        if (DEBOUNCE_QUEUE.isEmpty())
+        {   
+            debounceTimer.setTimerCount(0);
+            debounceTimer.enableTimer();
+        }   
+
+        DEBOUNCE_QUEUE.push(event);
+
+        // Set debounce state
+        switch (button)
+        {
+            case LEFT_BUTTON:
+                BUTTON_LEFT_DEBOUNCE = true;
+                break;
+            case RIGHT_BUTTON:
+                BUTTON_RIGHT_DEBOUNCE = true;
+                break;
+            default:
+                break;
+        }
+
+    }
 
 }
 

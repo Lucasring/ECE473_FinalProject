@@ -19,6 +19,17 @@ void DisplayMenu::changeContext(MenuContext context)
     _display.clearDisplay();
 }
 
+void DisplayMenu::nextMenu()
+{
+    _currContext = (MenuContext)((_currContext + 1) % AMOUNT_OF_MENUS);
+}
+
+void DisplayMenu::prevMenu()
+{
+    _currContext = (MenuContext)((_currContext - 1) % AMOUNT_OF_MENUS);
+}
+
+
 void DisplayMenu::draw()
 {
 
@@ -53,6 +64,7 @@ void DisplayMenu::_splashDraw()
     _display.setTextSize(2);
     _display.setTextColor(WHITE);
     _display.setCursor(16, 14);
+    
     _display.println("Lucas R.");
     _display.setCursor(10, 34);
     _display.println("Kai Leung");
@@ -129,5 +141,11 @@ void DisplayMenu::_gyroDraw()
 
 void DisplayMenu::_batteryDraw()
 {
+
+    _display.setTextSize(2);
+    _display.setTextColor(WHITE);
+
+    _display.setCursor(0, 0);
+    _display.println("Battery\nMenu");
 
 }
