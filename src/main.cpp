@@ -8,7 +8,9 @@
 #include <queue>
 
 #include "DisplayMenu.h"
-// Defines
+#include "globals.h"
+
+/* Defines */ 
 #define TIMER2_PERIOD_MS    1    
 
 // Process Call Period
@@ -21,25 +23,28 @@
 #define MAGNET_OFFSET       25
 #define LCD_OFFSET          50
 
+#define BUTTON_LEFT         PA0
+#define BUTTON_RIGHT        PA1
+
 // State Definitions
 typedef enum STATE
 {
     IDLE = 0,
     INIT,
     UPDATE_LCD,
-    READ_IMU,
     READ_MAGNETOMETER,
-    BUTTON_LEFT,
-    BUTTON_RIGHT,
+    READ_IMU,
+    BUTTON_LEFT_PRESSED,
+    BUTTON_RIGHT_PRESSED,
 } STATE;
 
 // GLOBALS
-std::priority_queue<int> STATES;
-STATE CURRENT_STATE = INIT;
+std::priority_queue<STATE> STATE_QUEUE;
 
 // IO Devices
 TwoWire Wire2(PB7, PB6);
-STM32TimerInterrupt timer(TIM2);
+STM32TimerInterrupt schedulerTimer(TIM2);
+STM32TimerInterrupt debounceTimer(TIM3);
 DisplayMenu display;
 MPU9250 IMU(Wire2, 0x68);
 
@@ -47,18 +52,30 @@ MPU9250 IMU(Wire2, 0x68);
  * @brief   Timer ISR for main process scheduling
  * @note    Runs every TIMER2_PERIOD_MS milliseconds
  */
-void timerISR(void);
+void schedulerTimerISR(void);
+void buttonLeftISR();
+void buttonRightISR();
+
 void _READ_IMU();
 void _READ_MAGNETOMETER();
 void _UPDATE_LCD();
 
+
 using namespace BLA;
 
+/**
+ * @brief Default setup function run at code start
+ * @note IO initialization should occur here
+ */
 void setup() {
 
     // Setup GPIO
-    pinMode(PC13, OUTPUT);
-    digitalWrite(PC13, LOW);
+    pinMode(BUTTON_LEFT, INPUT_PULLUP);
+    pinMode(BUTTON_RIGHT, INPUT_PULLUP);
+
+    // IO Interrupt Enables
+    attachInterrupt(digitalPinToInterrupt(BUTTON_LEFT), buttonLeftISR, FALLING);
+    attachInterrupt(digitalPinToInterrupt(BUTTON_RIGHT), buttonRightISR, FALLING);
 
     // Setup I2C
     Wire2.begin();
@@ -76,7 +93,7 @@ void setup() {
     display = DisplayMenu(128, 64, &Wire2, MENU_SPLASH);
 
     // Setup Timers
-    timer.setInterval(TIMER2_PERIOD_MS * 1000, timerISR);
+    schedulerTimer.setInterval(TIMER2_PERIOD_MS * 1000, schedulerTimerISR);
 
     // Draw Splash Screen
     display.draw();
@@ -84,56 +101,81 @@ void setup() {
     display.changeContext(MENU_COMPASS);
     
     // Enable Timer
-    timer.enableTimer();
+    schedulerTimer.enableTimer();
 
 }
 
 void loop() {
 
-    switch(CURRENT_STATE) 
+    while(!STATE_QUEUE.empty()) 
     {
-        case READ_IMU:
-            _READ_IMU();
-            CURRENT_STATE = IDLE;
-            break;
-        case READ_MAGNETOMETER:
-            _READ_MAGNETOMETER();
-            CURRENT_STATE = IDLE;
-            break;
-        case UPDATE_LCD:
-            _UPDATE_LCD();
-            CURRENT_STATE = IDLE;
-            break;
-        case IDLE:
-            break;
-    }
 
+        // select state function
+        switch(STATE_QUEUE.top()) 
+        {
+            case READ_IMU:
+                _READ_IMU();
+                break;
+            case READ_MAGNETOMETER:
+                _READ_MAGNETOMETER();
+                break;
+            case UPDATE_LCD:
+                _UPDATE_LCD();
+                break;
+            case IDLE:
+                break;
+            default:
+                break;
+        }
+
+        // remove executed state
+        STATE_QUEUE.pop();
+
+    }
 }
 
+/**
+ * @brief schedulerTimerISR for the main scheduling schedulerTimer. Recurring states should be defined here
+ * 
+ */
 unsigned int TIMER2_COUNT_MS = 0;
-void timerISR(void) 
+void schedulerTimerISR(void) 
 {
 
     TIMER2_COUNT_MS += TIMER2_PERIOD_MS;
 
     if( (TIMER2_COUNT_MS - IMU_OFFSET) % IMU_PERIOD_MS == 0 )
     {
-        CURRENT_STATE = READ_IMU;
+        STATE_QUEUE.push(READ_IMU);
         return;
     } 
     else if( (TIMER2_COUNT_MS - MAGNET_OFFSET) % MAGNET_PERIOD_MS == 0 )
     {
-        CURRENT_STATE = READ_MAGNETOMETER;
+        STATE_QUEUE.push(READ_MAGNETOMETER);
         return;
     }
     else if( (TIMER2_COUNT_MS - LCD_OFFSET) % LCD_PERIOD_MS == 0 )
     {
-        CURRENT_STATE = UPDATE_LCD;
+        STATE_QUEUE.push(UPDATE_LCD);
         return;
     }
 
 }
 
+void buttonLeftISR()
+{
+
+}
+
+void buttonRightISR()
+{
+
+}
+
+/**
+ * @brief state definition for READ_IMU state
+ * @note reads from the IMU and calculates the Euler roll and pitch orientation based
+ */
 void _READ_IMU()
 {
 
@@ -161,7 +203,11 @@ void _READ_IMU()
 
 }
 
-
+/**
+ * @brief state definition for READ_MAGNETOMETER state
+ * @note reads the IMU and calculates the tilt corrected magnetometer vector.
+ *       Also calculates the cardinal direction and heading for the compass
+ */
 void _READ_MAGNETOMETER()
 {
 
@@ -195,7 +241,7 @@ void _READ_MAGNETOMETER()
     MAGNET_CONTEXT.CmagX = magnetometerTiltCorrected(0, 0);
     MAGNET_CONTEXT.CmagY = magnetometerTiltCorrected(1, 0);
     MAGNET_CONTEXT.CmagZ = magnetometerTiltCorrected(2, 0);
-    COMPASS_CONTEXT.heading = (180 / PI) * atan2f(MAGNET_CONTEXT.CmagY, MAGNET_CONTEXT.CmagX) + 180;
+    COMPASS_CONTEXT.heading = (180 / PI) * atan2f(MAGNET_CONTEXT.CmagY, MAGNET_CONTEXT.CmagX) + 270;
     
     // Convert Compass heading into cardinal direction
     if (COMPASS_CONTEXT.heading >=  337.5 || COMPASS_CONTEXT.heading < 22.5) {
@@ -220,25 +266,28 @@ void _READ_MAGNETOMETER()
 
 }
 
+/**
+ * @brief state definition for the UPDATE_LCD state
+ */
 void _UPDATE_LCD()
 {
     display.draw();
 }
 
-    //do {
-    //    Serial.println("Calibrating Mag...");
-    //    IMU.calibrateMag();
-    //    Serial.println("Calibration results:");
-    //    Serial.print("Bias X: ");
-    //    Serial.println(IMU.getMagBiasX_uT(), 3);
-    //    Serial.print("Bias Y: ");
-    //    Serial.println(IMU.getMagBiasY_uT(), 3);
-    //    Serial.print("Bias Z: ");
-    //    Serial.println(IMU.getMagBiasZ_uT(), 3);
-    //    Serial.print("Scale X: ");
-    //    Serial.println(IMU.getMagScaleFactorX(), 3);
-    //    Serial.print("Scale Y: ");
-    //    Serial.println(IMU.getMagScaleFactorY(), 3);
-    //    Serial.print("Scale Z: ");
-    //    Serial.println(IMU.getMagScaleFactorZ(), 3);
-    //} while(1);
+//do {
+//    Serial.println("Calibrating Mag...");
+//    IMU.calibrateMag();
+//    Serial.println("Calibration results:");
+//    Serial.print("Bias X: ");
+//    Serial.println(IMU.getMagBiasX_uT(), 3);
+//    Serial.print("Bias Y: ");
+//    Serial.println(IMU.getMagBiasY_uT(), 3);
+//    Serial.print("Bias Z: ");
+//    Serial.println(IMU.getMagBiasZ_uT(), 3);
+//    Serial.print("Scale X: ");
+//    Serial.println(IMU.getMagScaleFactorX(), 3);
+//    Serial.print("Scale Y: ");
+//    Serial.println(IMU.getMagScaleFactorY(), 3);
+//    Serial.print("Scale Z: ");
+//    Serial.println(IMU.getMagScaleFactorZ(), 3);
+//} while(1);

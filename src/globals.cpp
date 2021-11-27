@@ -1,6 +1,5 @@
 #include "globals.h"
 
-volatile Qauternion g_OrientationQuaternion;
 volatile EulerAngles g_OrientationEuler;
 
 volatile accelContext ACCEL_CONTEXT;
