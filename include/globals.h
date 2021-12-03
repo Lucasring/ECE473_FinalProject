@@ -34,8 +34,17 @@ typedef struct compassContext
     int cardinal;
 } compassContext;
 
+typedef struct batteryContext
+{
+    float percentage {0.0f};
+    float value {0.0f};
+    int raw {0};
+    const float factor { 3.3 / 1028 };
+} batteryContext;
+
 /* Externs */
-volatile extern EulerAngles      g_OrientationEuler;
-volatile extern accelContext     ACCEL_CONTEXT;
-volatile extern magnetContext    MAGNET_CONTEXT;
-volatile extern compassContext   COMPASS_CONTEXT;
+volatile extern EulerAngles         g_OrientationEuler;
+volatile extern accelContext        ACCEL_CONTEXT;
+volatile extern magnetContext       MAGNET_CONTEXT;
+volatile extern compassContext      COMPASS_CONTEXT;
+volatile extern batteryContext      BATTERY_CONTEXT;

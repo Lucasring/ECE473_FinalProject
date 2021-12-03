@@ -12,6 +12,8 @@
 #include "globals.h"
 
 /* Defines */ 
+
+// Timer Interrupt Times
 #define SCHEDULER_PERIOD_MS     1    
 #define DEBOUNCE_PERIOD_MS      50
 
@@ -19,14 +21,22 @@
 #define IMU_PERIOD_MS       100
 #define MAGNET_PERIOD_MS    200
 #define LCD_PERIOD_MS       100
+#define BATTERY_PERIOD_MS   100
 
 // Process Start Time Offset
-#define IMU_OFFSET          5
-#define MAGNET_OFFSET       30
-#define LCD_OFFSET          55
+#define IMU_OFFSET              5
+#define MAGNET_OFFSET           30
+#define LCD_OFFSET              55
+#define BATTERY_READ_OFFSET     80
 
+// Pin Definitions
+#define PIN_BATTERY_VOLTAGE     PA5
 #define PIN_BUTTON_LEFT         PA0
 #define PIN_BUTTON_RIGHT        PA1
+
+// Other Variables
+#define BATTERY_MIN     1.2*3
+#define BATTERY_MAX     4.55
 
 typedef enum BUTTON
 {
@@ -42,6 +52,7 @@ typedef enum STATE
     UPDATE_LCD,
     READ_MAGNETOMETER,
     READ_IMU,
+    READ_BATTERY,
     BUTTON_LEFT_PRESSED,
     BUTTON_RIGHT_PRESSED,
 } STATE;
@@ -79,6 +90,7 @@ void buttonHanlder(BUTTON button);
 void _READ_IMU();
 void _READ_MAGNETOMETER();
 void _UPDATE_LCD();
+void _READ_BATTERY();
 
 
 using namespace BLA;
@@ -92,6 +104,7 @@ void setup() {
     // Setup GPIO
     pinMode(PIN_BUTTON_LEFT, INPUT_PULLUP);
     pinMode(PIN_BUTTON_RIGHT, INPUT_PULLUP);
+    pinMode(PIN_BATTERY_VOLTAGE, INPUT);
     pinMode(PC13, OUTPUT);
 
     // IO Interrupt Enables
@@ -150,6 +163,9 @@ void loop() {
             case UPDATE_LCD:
                 _UPDATE_LCD();
                 break;
+            case READ_BATTERY:
+                _READ_BATTERY();
+                break;
             case BUTTON_LEFT_PRESSED:
                 digitalWrite(PC13, HIGH);
                 display.prevMenu();
@@ -193,6 +209,11 @@ void schedulerTimerISR(void)
     else if( (TIMER2_COUNT_MS - LCD_OFFSET) % LCD_PERIOD_MS == 0 )
     {
         STATE_QUEUE.push(UPDATE_LCD);
+        return;
+    }
+    else if( (TIMER2_COUNT_MS - BATTERY_READ_OFFSET) % BATTERY_PERIOD_MS == 0 )
+    {
+        STATE_QUEUE.push(READ_BATTERY);
         return;
     }
 
@@ -441,20 +462,12 @@ void _UPDATE_LCD()
     display.draw();
 }
 
-//do {
-//    Serial.println("Calibrating Mag...");
-//    IMU.calibrateMag();
-//    Serial.println("Calibration results:");
-//    Serial.print("Bias X: ");
-//    Serial.println(IMU.getMagBiasX_uT(), 3);
-//    Serial.print("Bias Y: ");
-//    Serial.println(IMU.getMagBiasY_uT(), 3);
-//    Serial.print("Bias Z: ");
-//    Serial.println(IMU.getMagBiasZ_uT(), 3);
-//    Serial.print("Scale X: ");
-//    Serial.println(IMU.getMagScaleFactorX(), 3);
-//    Serial.print("Scale Y: ");
-//    Serial.println(IMU.getMagScaleFactorY(), 3);
-//    Serial.print("Scale Z: ");
-//    Serial.println(IMU.getMagScaleFactorZ(), 3);
-//} while(1);
+
+void _READ_BATTERY()
+{
+
+    BATTERY_CONTEXT.raw = analogRead(PIN_BATTERY_VOLTAGE);
+    BATTERY_CONTEXT.value = 2 * BATTERY_CONTEXT.raw * BATTERY_CONTEXT.factor; // Using a 1/2 voltage divider on the read pin
+    BATTERY_CONTEXT.percentage = (BATTERY_CONTEXT.value - BATTERY_MIN) / (BATTERY_MAX - BATTERY_MIN);
+
+}

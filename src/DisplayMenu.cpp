@@ -142,10 +142,14 @@ void DisplayMenu::_gyroDraw()
 void DisplayMenu::_batteryDraw()
 {
 
-    _display.setTextSize(2);
+    _display.setTextSize(1);
     _display.setTextColor(WHITE);
 
     _display.setCursor(0, 0);
-    _display.println("Battery\nMenu");
+    _display.println("Battery Menu");
+    _display.print("Voltage: ");
+    _display.println(BATTERY_CONTEXT.value, 2);
+    _display.print(BATTERY_CONTEXT.percentage*100, 0);
+    _display.println("%");
 
 }
