@@ -1,11 +1,11 @@
 #include <Arduino.h>
 #include <Wire.h>
+#include <math.h>
+#include <queue>
 #include <Adafruit_SSD1306.h>
 #include <STM32TimerInterrupt.h>
 #include <MPU9250.h>
-#include <math.h>
 #include <BasicLinearAlgebra.h>
-#include <queue>
 #include <CircularBuffer.h>
 
 #include "DisplayMenu.h"
@@ -15,7 +15,7 @@
 
 // Timer Interrupt Times
 #define SCHEDULER_PERIOD_MS     1    
-#define DEBOUNCE_PERIOD_MS      50
+#define DEBOUNCE_PERIOD_MS      20
 
 // Process Call Period
 #define IMU_PERIOD_MS       100
@@ -25,14 +25,15 @@
 
 // Process Start Time Offset
 #define IMU_OFFSET              5
-#define MAGNET_OFFSET           30
-#define LCD_OFFSET              55
-#define BATTERY_READ_OFFSET     80
+#define MAGNET_OFFSET           20
+#define LCD_OFFSET              40
+#define BATTERY_READ_OFFSET     85
 
 // Pin Definitions
 #define PIN_BATTERY_VOLTAGE     PA5
 #define PIN_BUTTON_LEFT         PA0
 #define PIN_BUTTON_RIGHT        PA1
+#define PIN_DEBUG               PA7
 
 // Other Variables
 #define BATTERY_MIN     1.2*3
@@ -76,6 +77,8 @@ STM32TimerInterrupt schedulerTimer(TIM2);
 STM32TimerInterrupt debounceTimer(TIM3);
 DisplayMenu display;
 MPU9250 IMU(Wire2, 0x68);
+unsigned int TIMER2_COUNT_MS = 0;
+
 
 // ISR Functions
 void schedulerTimerISR(void);
@@ -92,7 +95,6 @@ void _READ_MAGNETOMETER();
 void _UPDATE_LCD();
 void _READ_BATTERY();
 
-
 using namespace BLA;
 
 /**
@@ -105,7 +107,10 @@ void setup() {
     pinMode(PIN_BUTTON_LEFT, INPUT_PULLUP);
     pinMode(PIN_BUTTON_RIGHT, INPUT_PULLUP);
     pinMode(PIN_BATTERY_VOLTAGE, INPUT);
+    pinMode(PIN_DEBUG, OUTPUT);
     pinMode(PC13, OUTPUT);
+
+    digitalWrite(PIN_DEBUG, LOW);
 
     // IO Interrupt Enables
     attachInterrupt(digitalPinToInterrupt(PIN_BUTTON_LEFT), buttonLeftISR, FALLING);
@@ -128,11 +133,10 @@ void setup() {
 
     // Setup Timers
     schedulerTimer.setInterval(SCHEDULER_PERIOD_MS * 1000, schedulerTimerISR);
-    debounceTimer.setInterval(SCHEDULER_PERIOD_MS * 1000, debounceTimerISR);
+    debounceTimer.setInterval(DEBOUNCE_PERIOD_MS * 1000, debounceTimerISR);
 
     debounceTimer.disableTimer();
     schedulerTimer.disableTimer();
-
 
     // Draw Splash Screen
     display.draw();
@@ -144,6 +148,10 @@ void setup() {
 
 }
 
+/**
+ * @brief   loop implements the state machine state handling.
+ * 
+ */
 void loop() {
 
     digitalWrite(PC13, LOW);
@@ -190,7 +198,6 @@ void loop() {
  * @brief schedulerTimerISR for the main scheduling schedulerTimer. Recurring states should be defined here
  * 
  */
-unsigned int TIMER2_COUNT_MS = 0;
 void schedulerTimerISR(void) 
 {
 
@@ -219,16 +226,12 @@ void schedulerTimerISR(void)
 
 }
 
+/**
+ * @brief   Executes when the debounce timer interrupts. Determines if a button 
+ *          debounce is successful and queues the button press state.
+ */
 void debounceTimerISR()
 {
-
-    // Check from DEBOUNCE_QUEUE what button is deboucing
-    // Clear debounce flag
-    // Queue button pressed state
-    // if DEBOUNCE_QUEUE is empty
-        // disable timer
-    // else
-        // Load next debounceTime
 
     volatile DebounceEvent event = DEBOUNCE_QUEUE.first();
 
@@ -268,6 +271,7 @@ void debounceTimerISR()
         if (DEBOUNCE_QUEUE.isEmpty())
         {
             debounceTimer.disableTimer();
+            debounceTimer.setTimerCount(0);
             return;
         }
         else
@@ -299,16 +303,28 @@ void debounceTimerISR()
 
 }
 
+/**
+ * @brief  Interrupt Handler for left button
+ * 
+ */
 void buttonLeftISR()
 {
     buttonHanlder(LEFT_BUTTON);
 }
 
+/**
+ * @brief   Interrupt Handler for right button
+ * 
+ */
 void buttonRightISR()
 {
     buttonHanlder(RIGHT_BUTTON);
 }
 
+/**
+ * @brief   Executed with button interrupts. Setups the debounce timer and debounce variables as needed
+ * @param button    The button that trigged an interrupt request
+ */
 void buttonHanlder(BUTTON button)
 {
     
@@ -463,6 +479,10 @@ void _UPDATE_LCD()
 }
 
 
+/**
+ * @brief state definition for the READ_BATTERY state
+ * 
+ */
 void _READ_BATTERY()
 {
 
