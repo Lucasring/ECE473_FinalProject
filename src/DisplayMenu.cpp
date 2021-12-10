@@ -1,5 +1,13 @@
 #include "DisplayMenu.h"
 
+/**
+ * @brief Construct a new Display Menu:: Display Menu object
+ * 
+ * @param ScreenWidth       The width of the screen
+ * @param ScreenHeight      The height of the screen
+ * @param I2C_bus           An I2C bus object reference
+ * @param defaultContext    The default menu to display
+ */
 DisplayMenu::DisplayMenu(int ScreenWidth, int ScreenHeight, TwoWire* I2C_bus, MenuContext defaultContext)
 {
     _currContext = defaultContext;
@@ -13,23 +21,39 @@ DisplayMenu::DisplayMenu(int ScreenWidth, int ScreenHeight, TwoWire* I2C_bus, Me
     _display.clearDisplay();
 }
     
+/**
+ * @brief   Changes the menu currently displayed
+ * 
+ * @param context   The menu to display
+ */
 void DisplayMenu::changeContext(MenuContext context)
 {
     _currContext = context;
     _display.clearDisplay();
 }
 
+/**
+ * @brief   Increments the menu index
+ * 
+ */
 void DisplayMenu::nextMenu()
 {
     _currContext = (MenuContext)((_currContext + 1) % AMOUNT_OF_MENUS);
 }
 
+/**
+ * @brief   Decrements the menu index
+ * 
+ */
 void DisplayMenu::prevMenu()
 {
-    _currContext = (MenuContext)((_currContext - 1) % AMOUNT_OF_MENUS);
+    _currContext = (_currContext == 0) ? _currContext = MENU_BATTERY : (MenuContext)((_currContext - 1) % AMOUNT_OF_MENUS);
 }
 
-
+/**
+ * @brief   Draws the menu represented by the number in _currContext
+ * 
+ */
 void DisplayMenu::draw()
 {
 
@@ -58,6 +82,10 @@ void DisplayMenu::draw()
 
 }
 
+/**
+ * @brief   Draws the splash screen
+ * 
+ */
 void DisplayMenu::_splashDraw()
 {
     //_display.drawRect(10, 10, 20, 20, SSD1306_WHITE);
@@ -70,6 +98,10 @@ void DisplayMenu::_splashDraw()
     _display.println("Kai Leung");
 }
 
+/**
+ * @brief   Draws the compass display screen
+ * 
+ */
 void DisplayMenu::_compassDraw()
 {
 
@@ -85,6 +117,10 @@ void DisplayMenu::_compassDraw()
 
 }
 
+/**
+ * @brief Draws the accleration display menu
+ * 
+ */
 void DisplayMenu::_accelDraw()
 {
 
@@ -108,6 +144,10 @@ void DisplayMenu::_accelDraw()
 
 }
 
+/**
+ * @brief   Draws the gyroscope / orientation display menu
+ * 
+ */
 void DisplayMenu::_gyroDraw()
 {
 
@@ -139,6 +179,10 @@ void DisplayMenu::_gyroDraw()
 
 }
 
+/**
+ * @brief   Draws the battery display menu
+ * 
+ */
 void DisplayMenu::_batteryDraw()
 {
 

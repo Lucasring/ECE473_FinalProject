@@ -148,6 +148,10 @@ void setup() {
 
 }
 
+/**
+ * @brief   loop implements the state machine state handling.
+ * 
+ */
 void loop() {
 
     digitalWrite(PC13, LOW);
@@ -222,16 +226,12 @@ void schedulerTimerISR(void)
 
 }
 
+/**
+ * @brief   Executes when the debounce timer interrupts. Determines if a button 
+ *          debounce is successful and queues the button press state.
+ */
 void debounceTimerISR()
 {
-
-    // Check from DEBOUNCE_QUEUE what button is deboucing
-    // Clear debounce flag
-    // Queue button pressed state
-    // if DEBOUNCE_QUEUE is empty
-        // disable timer
-    // else
-        // Load next debounceTime
 
     volatile DebounceEvent event = DEBOUNCE_QUEUE.first();
 
@@ -303,16 +303,28 @@ void debounceTimerISR()
 
 }
 
+/**
+ * @brief  Interrupt Handler for left button
+ * 
+ */
 void buttonLeftISR()
 {
     buttonHanlder(LEFT_BUTTON);
 }
 
+/**
+ * @brief   Interrupt Handler for right button
+ * 
+ */
 void buttonRightISR()
 {
     buttonHanlder(RIGHT_BUTTON);
 }
 
+/**
+ * @brief   Executed with button interrupts. Setups the debounce timer and debounce variables as needed
+ * @param button    The button that trigged an interrupt request
+ */
 void buttonHanlder(BUTTON button)
 {
     
@@ -467,6 +479,10 @@ void _UPDATE_LCD()
 }
 
 
+/**
+ * @brief state definition for the READ_BATTERY state
+ * 
+ */
 void _READ_BATTERY()
 {
 
